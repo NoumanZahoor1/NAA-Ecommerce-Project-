@@ -128,7 +128,7 @@ const ChatWidget = () => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-            const response = await fetch('http://localhost:4242/api/chat', {
+            const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ messages: contextMessages }),
