@@ -136,11 +136,12 @@ export const calculateFitPrediction = (userProfile, product) => {
 /**
  * Get fit advice based on BMI and product fit
  */
-const getFitAdvice = (bmi, productFit, confidence) => {
+const getFitAdvice = (bmi, productFit = 'Regular', confidence) => {
+    const fitLabel = (productFit || 'Regular').toLowerCase();
     if (confidence > 85) {
-        return `Excellent fit match! This ${productFit.toLowerCase()} fit should work perfectly for your measurements.`;
+        return `Excellent fit match! This ${fitLabel} fit should work perfectly for your measurements.`;
     } else if (confidence > 75) {
-        return `Good fit expected. The ${productFit.toLowerCase()} fit may vary slightly based on personal preference.`;
+        return `Good fit expected. The ${fitLabel} fit may vary slightly based on personal preference.`;
     } else {
         return `Moderate fit confidence. Consider trying multiple sizes or checking detailed measurements.`;
     }
