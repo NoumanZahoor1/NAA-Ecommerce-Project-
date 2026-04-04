@@ -10,7 +10,8 @@ class VisualSearchService {
             'jacket', 'shirt', 't-shirt', 'pants', 'jeans',
             'shoes', 'sneakers', 'bag', 'backpack', 'dress',
             'sweater', 'hoodie', 'shorts', 'skirt', 'hat',
-            'wallet', 'purse', 'belt', 'sunglasses', 'coat'
+            'wallet', 'purse', 'belt', 'sunglasses', 'coat',
+            'watch', 'jewelry', 'bracelet', 'accessory'
         ];
     }
 
@@ -67,6 +68,8 @@ class VisualSearchService {
                                 else if (raw.includes('dress') || raw.includes('gown')) detectedCategory = 'dress';
                                 else if (raw.includes('wallet') || raw.includes('purse')) detectedCategory = 'wallet';
                                 else if (raw.includes('bag') || raw.includes('backpack')) detectedCategory = 'bag';
+                                else if (raw.includes('watch') || raw.includes('clock')) detectedCategory = 'watch';
+                                else if (raw.includes('jewelry') || raw.includes('bracelet') || raw.includes('earring') || raw.includes('necklace')) detectedCategory = 'accessory';
                                 
                                 if (detectedCategory) break;
                             }
@@ -89,8 +92,8 @@ class VisualSearchService {
                      if (lowerFilename.includes(label)) { detectedCategory = label; break; }
                  }
                  if (!detectedCategory) {
-                     // Smarter fallback: if it looks formal (pinstripes/dark), guess jacket
-                     detectedCategory = 'jacket'; 
+                     // Smart default for fashion items
+                     detectedCategory = 'accessory'; 
                  }
                  confidence = 90; 
                  features = ['detected via heuristics'];
@@ -157,7 +160,9 @@ class VisualSearchService {
             'shirt': ['t-shirt', 'polo', 'jersey', 'top', 'blouse'],
             'jeans': ['pants', 'trousers', 'denim', 'bottoms', 'shorts'],
             'shoes': ['sneakers', 'boots', 'sandals', 'footwear'],
-            'dress': ['gown', 'skirt', 'jumpsuit']
+            'dress': ['gown', 'skirt', 'jumpsuit'],
+            'watch': ['timepiece', 'chronograph', 'analog', 'smartwatch', 'bracelet'],
+            'accessory': ['jewelry', 'belt', 'sunglasses', 'wallet', 'bag', 'bracelet']
         };
 
         const colorFamilies = {
