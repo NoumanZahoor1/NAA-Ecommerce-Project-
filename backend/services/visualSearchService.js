@@ -40,19 +40,41 @@ class VisualSearchService {
                         const topLabels = results.map(r => r.label.toLowerCase());
                         console.log('HF Vision detected raw classes:', topLabels);
 
-                        // Intelligent Mapping to Our Categories
+                        // Intelligent Mapping to Our Categories - Prioritized
+                        // 1. Check for Jacket/Suit/Blazer first (Top Priority)
                         for (const raw of topLabels) {
-                            if (raw.includes('trench coat') || raw.includes('jacket') || raw.includes('cardigan') || raw.includes('cloak') || raw.includes('suit') || raw.includes('blazer') || raw.includes('tuxedo')) detectedCategory = 'jacket';
-                            else if (raw.includes('jersey') || raw.includes('shirt') || raw.includes('t-shirt') || raw.includes('sweatshirt')) detectedCategory = 'shirt';
-                            else if (raw.includes('jean') || raw.includes('trouser') || raw.includes('sweatpant')) detectedCategory = 'jeans';
-                            else if (raw.includes('shoe') || raw.includes('sneaker') || raw.includes('boot') || raw.includes('running shoe') || raw.includes('sandal')) detectedCategory = 'shoes';
-                            else if (raw.includes('dress') || raw.includes('gown') || raw.includes('miniskirt')) detectedCategory = 'dress';
-                            else if (raw.includes('wallet') || raw.includes('purse')) detectedCategory = 'wallet';
-                            else if (raw.includes('bag') || raw.includes('backpack') || raw.includes('mailbag')) detectedCategory = 'bag';
-                            else if (raw.includes('watch') || raw.includes('stopwatch')) detectedCategory = 'watch';
-                            else if (raw.includes('sunglass') || raw.includes('shades')) detectedCategory = 'sunglasses';
-                            
-                            if (detectedCategory) break;
+                            if (raw.includes('trench coat') || raw.includes('jacket') || raw.includes('cardigan') || 
+                                raw.includes('cloak') || raw.includes('suit') || raw.includes('blazer') || 
+                                raw.includes('tuxedo') || raw.includes('overcoat')) {
+                                detectedCategory = 'jacket';
+                                break;
+                            }
+                        }
+
+                        // 2. Check for Shirts/T-Shirts if no jacket was found
+                        if (!detectedCategory) {
+                            for (const raw of topLabels) {
+                                if (raw.includes('jersey') || raw.includes('shirt') || raw.includes('t-shirt') || 
+                                    raw.includes('sweatshirt') || raw.includes('polo')) {
+                                    detectedCategory = 'shirt';
+                                    break;
+                                }
+                            }
+                        }
+
+                        // 3. Check for the rest if still no category
+                        if (!detectedCategory) {
+                            for (const raw of topLabels) {
+                                if (raw.includes('jean') || raw.includes('trouser') || raw.includes('sweatpant') || raw.includes('pant')) detectedCategory = 'jeans';
+                                else if (raw.includes('shoe') || raw.includes('sneaker') || raw.includes('boot') || raw.includes('running shoe') || raw.includes('sandal')) detectedCategory = 'shoes';
+                                else if (raw.includes('dress') || raw.includes('gown') || raw.includes('miniskirt')) detectedCategory = 'dress';
+                                else if (raw.includes('wallet') || raw.includes('purse')) detectedCategory = 'wallet';
+                                else if (raw.includes('bag') || raw.includes('backpack') || raw.includes('mailbag')) detectedCategory = 'bag';
+                                else if (raw.includes('watch') || raw.includes('stopwatch')) detectedCategory = 'watch';
+                                else if (raw.includes('sunglass') || raw.includes('shades')) detectedCategory = 'sunglasses';
+                                
+                                if (detectedCategory) break;
+                            }
                         }
 
                         confidence = Math.round(results[0].score * 100);
