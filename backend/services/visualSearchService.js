@@ -42,7 +42,7 @@ class VisualSearchService {
 
                         // Intelligent Mapping to Our Categories
                         for (const raw of topLabels) {
-                            if (raw.includes('trench coat') || raw.includes('jacket') || raw.includes('cardigan') || raw.includes('cloak')) detectedCategory = 'jacket';
+                            if (raw.includes('trench coat') || raw.includes('jacket') || raw.includes('cardigan') || raw.includes('cloak') || raw.includes('suit') || raw.includes('blazer') || raw.includes('tuxedo')) detectedCategory = 'jacket';
                             else if (raw.includes('jersey') || raw.includes('shirt') || raw.includes('t-shirt') || raw.includes('sweatshirt')) detectedCategory = 'shirt';
                             else if (raw.includes('jean') || raw.includes('trouser') || raw.includes('sweatpant')) detectedCategory = 'jeans';
                             else if (raw.includes('shoe') || raw.includes('sneaker') || raw.includes('boot') || raw.includes('running shoe') || raw.includes('sandal')) detectedCategory = 'shoes';
