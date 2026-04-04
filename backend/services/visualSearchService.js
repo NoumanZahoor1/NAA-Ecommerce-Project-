@@ -129,14 +129,15 @@ class VisualSearchService {
 
     rgbToColorName(r, g, b) {
         const brightness = (r + g + b) / 3;
-        // Dark Navy/Blue detection enhancement
-        if (b > r + 10 && b > g + 10 && brightness < 100) return 'blue';
         
-        if (brightness < 45) return 'black';
+        // Deep Navy/Blue detection (even if very dark)
+        if (b > r + 5 && b > g + 5 && b > 30) return 'blue'; 
+        
+        if (brightness < 40) return 'black';
         if (brightness > 230) return 'white';
-        if (r > g + 30 && r > b + 30) return 'red';
-        if (g > r + 30 && g > b + 30) return 'green';
-        if (b > r + 30 && b > g + 30) return 'blue';
+        if (r > g + 25 && r > b + 25) return 'red';
+        if (g > r + 25 && g > b + 25) return 'green';
+        if (b > r + 25 && b > g + 25) return 'blue';
         return 'gray';
     }
 
@@ -145,30 +146,46 @@ class VisualSearchService {
         const { category, colors } = analysis;
         const categoryLower = category.toLowerCase();
 
+        // Semantic Synonyms Mapping
+        const synonyms = {
+            'jacket': ['blazer', 'coat', 'suit', 'outerwear', 'bomber', 'puff', 'tuxedo'],
+            'shirt': ['t-shirt', 'polo', 'jersey', 'top', 'blouse'],
+            'jeans': ['pants', 'trousers', 'denim', 'bottoms', 'shorts'],
+            'shoes': ['sneakers', 'boots', 'sandals', 'footwear'],
+            'dress': ['gown', 'skirt', 'jumpsuit']
+        };
+
+        const relatedTerms = synonyms[categoryLower] || [];
+
         return products.map(product => {
             let score = 0;
             const nameLower = product.name.toLowerCase();
             const productCategoryLower = (product.category || '').toLowerCase();
             const productColors = product.colors || [];
 
+            // 1. Direct Category Match (60 pts)
             if (productCategoryLower.includes(categoryLower) || nameLower.includes(categoryLower)) {
-                score += 60;
-            } else if (categoryLower === 'wallet' && (productCategoryLower.includes('accessory') || nameLower.includes('wallet') || nameLower.includes('card holder'))) {
+                score += 65;
+            } 
+            // 2. Semantic Synonym Match (50 pts)
+            else if (relatedTerms.some(term => productCategoryLower.includes(term) || nameLower.includes(term))) {
                 score += 55;
             }
 
+            // 3. Color Match (35 pts)
             if (colors?.length > 0) {
                 const primaryColor = colors[0].toLowerCase();
                 if (productColors.some(c => c.toLowerCase().includes(primaryColor))) {
-                    score += 30;
+                    score += 35;
                 }
             }
 
+            // 4. Quality/Rating (10 pts)
             if (product.rating >= 4.5) score += 10;
 
             return { ...product.toObject?.() || product, matchScore: Math.min(score, 100) };
         })
-        .filter(p => p.matchScore > 10)
+        .filter(p => p.matchScore > 15)
         .sort((a, b) => b.matchScore - a.matchScore)
         .slice(0, 12);
     }
