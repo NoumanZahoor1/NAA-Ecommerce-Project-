@@ -23,6 +23,7 @@ class VisualSearchService {
             let detectedCategory = null;
             let confidence = 0;
             let features = [];
+            let analysisRawLabels = [];
 
             // Execute Cloud AI if HF_TOKEN is configured
             if (process.env.HF_TOKEN && process.env.HF_TOKEN.startsWith('hf_')) {
@@ -41,6 +42,9 @@ class VisualSearchService {
                     if (results && results.length > 0) {
                         const topLabels = results.map(r => r.label.toLowerCase());
                         console.log('✅ HF Vision Result Labels:', topLabels);
+
+                        // Capture raw labels for matching boost
+                        analysisRawLabels = topLabels;
 
                         // Intelligent Mapping - Prioritized
                         for (const raw of topLabels) {
@@ -98,7 +102,8 @@ class VisualSearchService {
                 confidence: confidence || 92,
                 colors: colors,
                 style: 'Matching found attributes',
-                features: features
+                features: features,
+                rawLabels: analysisRawLabels
             };
         } catch (error) {
             console.error("CRITICAL Service Error:", error);
@@ -137,13 +142,13 @@ class VisualSearchService {
         if (brightness > 230) return 'white';
         if (r > g + 25 && r > b + 25) return 'red';
         if (g > r + 25 && g > b + 25) return 'green';
-        if (b > r + 25 && b > g + 25) return 'blue';
+        if (b > r + 25 && g > b + 25) return 'blue';
         return 'gray';
     }
 
     async findMatches(analysis, products) {
         console.log(`Service: findMatches for ${analysis.category} amongst ${products.length} products`);
-        const { category, colors } = analysis;
+        const { category, colors, rawLabels = [] } = analysis;
         const categoryLower = category.toLowerCase();
 
         // Semantic Synonyms Mapping
@@ -155,32 +160,49 @@ class VisualSearchService {
             'dress': ['gown', 'skirt', 'jumpsuit']
         };
 
+        const colorFamilies = {
+            'blue': ['navy', 'indigo', 'azure', 'cyan', 'blue'],
+            'black': ['charcoal', 'ebony', 'black', 'dark gray'],
+            'white': ['cream', 'off-white', 'white', 'beige'],
+            'gray': ['silver', 'gray', 'charcoal']
+        };
+
         const relatedTerms = synonyms[categoryLower] || [];
+        const detectedColor = colors?.[0]?.toLowerCase();
+        const detectedColorFamily = colorFamilies[detectedColor] || [detectedColor];
 
         return products.map(product => {
             let score = 0;
             const nameLower = product.name.toLowerCase();
             const productCategoryLower = (product.category || '').toLowerCase();
-            const productColors = product.colors || [];
+            const productColors = (product.colors || []).map(c => c.toLowerCase());
 
             // 1. Direct Category Match (60 pts)
             if (productCategoryLower.includes(categoryLower) || nameLower.includes(categoryLower)) {
                 score += 65;
             } 
-            // 2. Semantic Synonym Match (50 pts)
+            // 2. Semantic Synonym Match (55 pts)
             else if (relatedTerms.some(term => productCategoryLower.includes(term) || nameLower.includes(term))) {
                 score += 55;
             }
 
-            // 3. Color Match (35 pts)
-            if (colors?.length > 0) {
-                const primaryColor = colors[0].toLowerCase();
-                if (productColors.some(c => c.toLowerCase().includes(primaryColor))) {
+            // 3. Raw Label Super-Boost (Extra 25 pts)
+            // If the AI saw 'suit' and the product is a 'blazer', give them extra weight!
+            if (rawLabels.some(label => nameLower.includes(label) || productCategoryLower.includes(label))) {
+                score += 25;
+            }
+
+            // 4. Smart Color Match (35 pts)
+            if (detectedColor) {
+                const hasColorMatch = productColors.some(c => 
+                    detectedColorFamily.includes(c) || c.includes(detectedColor)
+                );
+                if (hasColorMatch) {
                     score += 35;
                 }
             }
 
-            // 4. Quality/Rating (10 pts)
+            // 5. Quality/Rating (10 pts)
             if (product.rating >= 4.5) score += 10;
 
             return { ...product.toObject?.() || product, matchScore: Math.min(score, 100) };
