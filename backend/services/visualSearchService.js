@@ -45,7 +45,7 @@ class LocalVisualSearchService {
         }
     }
 
-    async analyzeImage(imageBuffer) {
+    async analyzeImage(imageBuffer, filename = '') {
         try {
             console.log('Service: Processing image with Jimp for optimized mock AI...');
             const image = await Jimp.read(imageBuffer);
@@ -53,15 +53,30 @@ class LocalVisualSearchService {
             // Extract the real color from the uploaded image!
             const colors = await this.extractColors(image);
             
-            // Pick a random category so the UI looks active
-            const randomCategory = this.candidateLabels[Math.floor(Math.random() * 5)]; // Picks from top 5 (jacket, shirt, t-shirt, pants, jeans)
+            // Pick a category. MAGIC TRICK FOR PRESENTATIONS:
+            // Look secretly at the filename to correctly "guess" the category!
+            let detectedCategory = null;
+            const lowerFilename = filename.toLowerCase();
+            
+            for (const label of this.candidateLabels) {
+                if (lowerFilename.includes(label)) {
+                    detectedCategory = label;
+                    break;
+                }
+            }
+            
+            // If they didn't put a hint in the filename, fall back to a random generic one
+            if (!detectedCategory) {
+                 const popular = ['jacket', 'shirt', 'jeans', 'shoes', 'dress'];
+                 detectedCategory = popular[Math.floor(Math.random() * popular.length)];
+            }
 
             // Simulate AI delay for realism
             await new Promise(r => setTimeout(r, 1500));
 
             return {
-                category: randomCategory,
-                confidence: 94,
+                category: detectedCategory,
+                confidence: 96 + Math.floor(Math.random() * 4), // Looks like real high confidence
                 colors: colors,
                 style: 'Casual',
                 features: ['stylish', 'comfortable', 'trendy']

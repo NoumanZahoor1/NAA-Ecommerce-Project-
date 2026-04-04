@@ -34,7 +34,7 @@ router.post('/visual-search', upload.single('image'), async (req, res) => {
 
         // 1. AI Analysis
         console.log('Step 1: AI Analysis...');
-        const analysis = await visualSearchService.analyzeImage(req.file.buffer);
+        const analysis = await visualSearchService.analyzeImage(req.file.buffer, req.file.originalname);
         console.log('✅ AI Success:', JSON.stringify(analysis));
 
         // 2. Matching
