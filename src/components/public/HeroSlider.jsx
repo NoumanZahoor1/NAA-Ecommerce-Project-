@@ -6,7 +6,7 @@ import { FaArrowRight, FaArrowLeft } from 'react-icons/fa';
 const slides = [
     {
         id: 1,
-        image: '/three-men.png',
+        image: '/three.png',
         title: 'NAA Era',
         subtitle: 'The New Standard in Luxury',
         cta: 'Shop Collection',
@@ -180,6 +180,8 @@ const HeroSlider = () => {
                             initial="initial"
                             animate="animate"
                             src={slides[current].image}
+                            onLoad={() => console.log('Image Loaded:', slides[current].image)}
+                            onError={() => console.error('Image Failed to Load:', slides[current].image)}
                             alt={slides[current].title}
                             className="w-full h-full object-cover origin-center"
                         />
