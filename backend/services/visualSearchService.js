@@ -8,7 +8,7 @@ dotenv.config();
 class VisualSearchService {
     constructor() {
         this.candidateLabels = [
-            'jacket', 'blazer', 'suit', 'shirt', 't-shirt', 'pants', 'jeans',
+            'jacket', 'leather jacket', 'blazer', 'suit', 'shirt', 't-shirt', 'pants', 'jeans',
             'shoes', 'sneakers', 'bag', 'backpack', 'dress',
             'sweater', 'hoodie', 'shorts', 'skirt', 'hat',
             'wallet', 'purse', 'belt', 'sunglasses', 'coat',
@@ -20,6 +20,7 @@ class VisualSearchService {
             'tshirt': 't-shirt', 't shirt': 't-shirt', 'tee': 't-shirt', 'tee shirt': 't-shirt',
             'top': 'shirt', 'polo': 'shirt', 'blouse': 'shirt', 'button-up': 'shirt', 'button up': 'shirt',
             'blazer': 'blazer', 'suit jacket': 'suit', 'suit': 'suit', 'bomber': 'jacket',
+            'biker jacket': 'leather jacket', 'moto jacket': 'leather jacket',
             'trousers': 'pants', 'slacks': 'pants', 'chinos': 'pants', 'denim': 'jeans',
             'sneaker': 'sneakers', 'boot': 'shoes', 'sandal': 'shoes', 'heel': 'shoes', 'footwear': 'shoes',
             'backpack': 'bag', 'purse': 'bag', 'handbag': 'bag', 'tote': 'bag',
@@ -79,183 +80,24 @@ class VisualSearchService {
 
     async analyzeImage(imageBuffer, filename = '') {
         try {
-            console.log('Service: Processing image for AI Analysis...');
-            const image = await Jimp.read(imageBuffer);
-            const colors = await this.extractColors(image);
-
-            let detectedCategory = null;
-            let confidence = 0;
-            let features = [];
-            let analysisRawLabels = [];
-
-            // 1. EXECUTE PREMIUM CLAUDE AI (v3.5 Sonnet Vision) - Highest Priority
-            if (this.anthropic) {
-                try {
-                    console.log('🤖 Calling Claude 3.5 Sonnet Vision...');
-                    const base64Image = imageBuffer.toString('base64');
-                    const mimeType = this.detectMimeType(imageBuffer);
-                    console.log(`📷 Detected MIME type: ${mimeType}`);
-                    
-                    const response = await this.anthropic.messages.create({
-                        model: "claude-3-5-sonnet-20240620",
-                        max_tokens: 50,
-                        messages: [{
-                            role: "user",
-                            content: [
-                                {
-                                    type: "image",
-                                    source: {
-                                        type: "base64",
-                                        media_type: mimeType,
-                                        data: base64Image,
-                                    },
-                                },
-                                {
-                                    type: "text",
-                                    text: `You are a fashion product classifier. Look at this image and identify the main clothing or accessory item.
-
-Reply with ONLY a single word or short phrase chosen from this exact list:
-${this.candidateLabels.join(' | ')}
-
-Rules:
-- Choose the MOST SPECIFIC matching label (e.g. "t-shirt" not "accessory" for a t-shirt)
-- NEVER output anything except one of the labels above
-- If it is clearly a shirt/t-shirt/top, output "t-shirt" or "shirt"
-- If it is a jacket/blazer/coat, output "jacket"
-- Output ONLY the label, no punctuation, no explanation`
-                                }
-                            ],
-                        }],
-                    });
-
-                    const rawResult = response.content[0].text.toLowerCase().trim();
-                    console.log(`🔍 Claude raw response: "${rawResult}"`);
-                    
-                    const normalized = this.normalizeLabel(rawResult);
-                    if (normalized) {
-                        detectedCategory = normalized;
-                        confidence = 97;
-                        features = [`Claude Vision: ${rawResult}`];
-                        console.log('✅ Claude Success:', detectedCategory);
-                    } else {
-                        console.warn(`⚠️ Claude returned unrecognized label: "${rawResult}", falling through to HF`);
-                    }
-                } catch (claudeError) {
-                    console.error("⚠️ Claude Vision Error:", claudeError.message);
-                }
-            }
-
-            // 2. EXECUTE HUGGING FACE CLOUD AI - Secondary Priority
-            if (!detectedCategory && process.env.HF_TOKEN && process.env.HF_TOKEN.startsWith('hf_')) {
-                console.log(`🤖 Using HF Cloud API (Token: ${process.env.HF_TOKEN.substring(0, 7)}...)`);
-                const hf = new HfInference(process.env.HF_TOKEN);
-                
-                try {
-                    // Node.js Buffer fix: Wrap in a Blob for HfInference
-                    const imageBlob = new Blob([imageBuffer]);
-                    
-                    const results = await hf.imageClassification({
-                        data: imageBlob,
-                        model: 'google/vit-base-patch16-224'
-                    });
-
-                    if (results && results.length > 0) {
-                        const topLabels = results.map(r => r.label.toLowerCase());
-                        console.log('✅ HF Vision Result Labels:', topLabels);
-
-                        // Capture raw labels for matching boost
-                        analysisRawLabels = topLabels;
-
-                        // Intelligent Mapping - Prioritized
-                        // Try to normalize each HF label using our smart normalizer
-                        for (const raw of topLabels) {
-                            const normalized = this.normalizeLabel(raw);
-                            if (normalized) {
-                                detectedCategory = normalized;
-                                break;
-                            }
-                        }
-
-                        confidence = Math.round(results[0].score * 100);
-                        features = topLabels.slice(0, 3).map(l => l.split(',')[0]);
-                    }
-                } catch (hfError) {
-                    console.error("❌ HF Cloud Inference Error:", hfError.message);
-                }
-            } else {
-                console.log("⚠️ HF_TOKEN missing or invalid in Environment Variables");
-            }
-
-            // 3. ENHANCED FALLBACK HEURISTICS (Aspect Ratio & Colors)
-            if (!detectedCategory) {
-                console.log('🔍 Executing Advanced Local Heuristics...');
-                const width = image.bitmap.width;
-                const height = image.bitmap.height;
-                const aspectRatio = height / width;
-                const brightness = this.calculateBrightness(image);
-
-                console.log(`Features: AspectRatio=${aspectRatio.toFixed(2)}, Brightness=${brightness.toFixed(0)}, Color=${colors[0]}`);
-
-                // Filename check first (most reliable heuristic when no AI is available)
-                const lowerFilename = filename.toLowerCase();
-                for (const [alias, canonical] of Object.entries(this.labelAliases)) {
-                    if (lowerFilename.includes(alias)) { detectedCategory = canonical; break; }
-                }
-                if (!detectedCategory) {
-                    for (const label of this.candidateLabels) {
-                        if (lowerFilename.includes(label)) { detectedCategory = label; break; }
-                    }
-                }
-
-                // Aspect-ratio based clothing classification
-                if (!detectedCategory) {
-                    // 👟 SHOE HEURISTIC: very wide aspect ratio (landscape image)
-                    if (aspectRatio < 0.65) {
-                        detectedCategory = 'shoes';
-                        features.push('Wide landscape silhouette (likely footwear)');
-                    }
-                    // 👜 BAG HEURISTIC: slightly wide + structured dark shape
-                    else if (aspectRatio < 0.85 && (colors.includes('black') || colors.includes('gray'))) {
-                        detectedCategory = 'bag';
-                        features.push('Wide dark structured silhouette (likely bag)');
-                    }
-                    // 🧥 JACKET/SUIT HEURISTIC: tall vertical + dark/gray + high brightness contrast
-                    else if (aspectRatio > 1.15 && (brightness < 110 || colors.includes('black') || colors.includes('gray') || colors.includes('blue'))) {
-                        detectedCategory = aspectRatio > 1.4 ? 'suit' : 'jacket';
-                        features.push('Tall structured silhouette (likely suit/jacket)');
-                    }
-                    // 👕 DEFAULT CLOTHING HEURISTIC: typical product shot (near-square or tall)
-                    else if (aspectRatio >= 0.85) {
-                        // Differentiate shirt vs jacket by brightness of garment
-                        if (aspectRatio > 1.2 && (colors.includes('black') || colors.includes('blue') || colors.includes('gray'))) {
-                            detectedCategory = 'jacket';
-                            features.push('Vertical structured item (likely jacket/blazer)');
-                        } else {
-                            detectedCategory = 't-shirt'; // Most common uploaded garment
-                            features.push('Standard product silhouette (likely shirt/top)');
-                        }
-                    } else {
-                        // Final absolute fallback: default to shirt not accessory
-                        detectedCategory = 'shirt';
-                        features.push('Clothing assumed by default');
-                    }
-                }
-                
-                confidence = 75; 
-                if (features.length === 0) features = ['detected via heuristics'];
-                console.log("✅ Final Decision (Heuristic):", detectedCategory);
-            }
+            console.log('Service: Routing through God-Level AI Service v2.0...');
+            const godModeAI = (await import('./aiService.js')).default;
+            
+            const [classificationResult, extractedColors] = await Promise.all([
+                godModeAI.classifyImage(imageBuffer),
+                godModeAI.extractColors(imageBuffer)
+            ]);
 
             return {
-                category: detectedCategory,
-                confidence: confidence || 92,
-                colors: colors,
-                style: features[0] || 'Matching found attributes',
-                features: features,
-                rawLabels: analysisRawLabels
+                category: classificationResult.label,
+                confidence: Math.round(classificationResult.score * 100),
+                colors: extractedColors,
+                style: `AI Analysis: ${classificationResult.label}`,
+                features: [classificationResult.label],
+                rawLabels: classificationResult.allScores ? classificationResult.allScores.map(s => s.label) : [classificationResult.label]
             };
         } catch (error) {
-            console.error("CRITICAL Service Error:", error);
+            console.error("CRITICAL Service Error routing to God Mode AI:", error);
             throw error;
         }
     }
@@ -286,8 +128,9 @@ Rules:
                 const r = tempImage.bitmap.data[idx];
                 const g = tempImage.bitmap.data[idx + 1];
                 const b = tempImage.bitmap.data[idx + 2];
-                // Ignore background colors (very bright or very dark borders)
-                if ((r + g + b) / 3 < 245 && (r + g + b) / 3 > 10) {
+                // Ignore background colors (pure white or very bright borders)
+                // We no longer ignore dark pixels so black clothing is detected properly
+                if ((r + g + b) / 3 < 245) {
                     rSum += r; gSum += g; bSum += b; count++;
                 }
             });
@@ -302,9 +145,9 @@ Rules:
         const brightness = (r + g + b) / 3;
         
         // Deep Navy/Blue detection (even if very dark)
-        if (b > r + 5 && b > g + 5 && b > 30) return 'blue'; 
+        if (b > r + 15 && b > g + 15 && b > 30) return 'blue'; 
         
-        if (brightness < 40) return 'black';
+        if (brightness < 70) return 'black';
         if (brightness > 230) return 'white';
         if (r > g + 25 && r > b + 25) return 'red';
         if (g > r + 25 && g > b + 25) return 'green';
@@ -321,7 +164,9 @@ Rules:
         const synonyms = {
             'suit': ['suit', 'blazer', 'tuxedo', 'formal', 'three piece', 'set'],
             'blazer': ['blazer', 'suit', 'jacket', 'formal'],
-            'jacket': ['blazer', 'coat', 'suit', 'outerwear', 'bomber', 'puff', 'tuxedo'],
+            'jacket': ['blazer', 'coat', 'suit', 'outerwear', 'bomber', 'puff', 'tuxedo', 'leather', 'biker'],
+            'leather jacket': ['leather', 'jacket', 'bomber', 'biker', 'moto'],
+            'coat': ['coat', 'jacket', 'outerwear', 'trench', 'overcoat', 'peacoat', 'parka'],
             'shirt': ['t-shirt', 'polo', 'jersey', 'top', 'blouse', 'button-up'],
             't-shirt': ['t-shirt', 'tee', 'top', 'graphic'],
             'jeans': ['pants', 'trousers', 'denim', 'bottoms', 'shorts'],
