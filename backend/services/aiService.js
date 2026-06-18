@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { pipeline, env } from '@xenova/transformers';
+import { pipeline, env, RawImage } from '@xenova/transformers';
 import { Jimp } from 'jimp';
 import dotenv from 'dotenv';
 
@@ -99,7 +99,9 @@ class VisualSearchService {
                 try {
                     const dummyImage = new Jimp({ width: 224, height: 224, color: 0xFFFFFFFF });
                     const dummyBuffer = await dummyImage.getBuffer("image/jpeg");
-                    await this.clipModel(dummyBuffer, ['clothing']);
+                    const dummyBlob = new Blob([dummyBuffer], { type: 'image/jpeg' });
+                    const dummyRaw = await RawImage.fromBlob(dummyBlob);
+                    await this.clipModel(dummyRaw, ['clothing']);
                     console.log('🚀 Model ready!');
                 } catch (e) {
                     console.warn('⚠️ Warmup skipped:', e.message);
@@ -136,36 +138,28 @@ class VisualSearchService {
             this.classifyWithOpenAIFast(imageBuffer)
         ]);
 
-        const predictions = [];
+        let finalResult = null;
 
-        // Collect successful predictions
-        if (clipResult.status === 'fulfilled' && clipResult.value) {
-            predictions.push({ model: 'CLIP', ...clipResult.value, weight: 0.9 });
-            console.log(`✅ CLIP: ${clipResult.value.label} (${(clipResult.value.score * 100).toFixed(1)}%)`);
-        } else if (clipResult.status === 'rejected') {
-            console.warn('⚠️ CLIP failed:', clipResult.reason?.message);
-        }
-
-        if (analysisResult.status === 'fulfilled' && analysisResult.value?.label) {
-            predictions.push({ model: 'Analysis', ...analysisResult.value, weight: 0.7 }); // Increased weight for enhanced detection
-            console.log(`✅ Analysis: ${analysisResult.value.label} (${(analysisResult.value.score * 100).toFixed(1)}%)`);
-        }
-
+        // Strict Fallback Priority: OpenAI > CLIP > Heuristic
         if (openAIResult.status === 'fulfilled' && openAIResult.value) {
-            predictions.push({ model: 'OpenAI', ...openAIResult.value, weight: 1.0 });
-            console.log(`✅ OpenAI: ${openAIResult.value.label} (${(openAIResult.value.score * 100).toFixed(1)}%)`);
+            console.log(`✅ OpenAI wins: ${openAIResult.value.label} (${(openAIResult.value.score * 100).toFixed(1)}%)`);
+            finalResult = openAIResult.value;
+        } else if (clipResult.status === 'fulfilled' && clipResult.value) {
+            console.log(`✅ CLIP wins: ${clipResult.value.label} (${(clipResult.value.score * 100).toFixed(1)}%)`);
+            finalResult = clipResult.value;
+        } else if (analysisResult.status === 'fulfilled' && analysisResult.value?.label) {
+            console.log(`⚠️ Heuristic Fallback: ${analysisResult.value.label} (${(analysisResult.value.score * 100).toFixed(1)}%)`);
+            finalResult = analysisResult.value;
         }
 
         const totalDuration = Date.now() - startTime;
         console.log(`🏁 Total Time: ${totalDuration}ms`);
 
-        if (predictions.length > 0) {
-            const finalResult = this.ensembleVote(predictions);
-            console.log(`🎯 FINAL: ${finalResult.label} (${(finalResult.score * 100).toFixed(1)}%)`);
+        if (finalResult) {
             return finalResult;
         }
 
-        return { label: 't-shirt', score: 0.3, note: 'Fallback' };
+        return { label: 't-shirt', score: 0.3, note: 'Absolute Fallback' };
     }
 
     /**
@@ -205,7 +199,13 @@ class VisualSearchService {
             specificPrompts[label] || `a photograph of a ${label}, fashion product image`
         );
 
-        const results = await this.clipModel(processedBuffer, detailedLabels);
+        const blob = new Blob([processedBuffer], { type: 'image/jpeg' });
+        const rawImage = await RawImage.fromBlob(blob);
+        const results = await this.clipModel(rawImage, detailedLabels);
+        
+        // IMPORTANT: Transformers.js returns results in the original label order, NOT sorted by score!
+        results.sort((a, b) => b.score - a.score);
+        
         const topResult = results[0];
 
         return {
@@ -446,14 +446,19 @@ class VisualSearchService {
             const g = image.bitmap.data[idx + 1];
             const b = image.bitmap.data[idx + 2];
 
+            // Ignore pure white background pixels
+            if ((r + g + b) / 3 > 245) return;
+
             const colorName = this.rgbToColorName(r, g, b);
             colorCounts[colorName] = (colorCounts[colorName] || 0) + 1;
         });
 
-        return Object.entries(colorCounts)
+        const colors = Object.entries(colorCounts)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 3)
             .map(([color]) => color);
+            
+        return colors.length > 0 ? colors : ['black']; // Fallback
     }
 
     rgbToColorName(r, g, b) {
@@ -463,7 +468,7 @@ class VisualSearchService {
         const saturation = max - min;
 
         if (saturation < 30) {
-            if (brightness < 50) return 'black';
+            if (brightness < 75) return 'black'; // Increased to catch leather highlights
             if (brightness > 200) return 'white';
             return 'gray';
         }
