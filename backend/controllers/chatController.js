@@ -145,6 +145,33 @@ const getEnhancedReply = async (msgs) => {
         return { reply: "🚚 **Shipping Info**: \n- Free Shipping on orders over $100.\n- Standard Delivery: 3-5 business days." };
     }
 
+    // > Trending products handler
+    if (lastMsg.includes('trending')) {
+        try {
+            const products = await Product.find({
+                $or: [
+                    { name: { $regex: 'jacket|leather|hoodie|watch', $options: 'i' } },
+                    { description: { $regex: 'jacket|leather|hoodie|watch', $options: 'i' } }
+                ],
+                name: { $ne: 'Gloves' }
+            });
+
+            // Sort to ensure Leather Jacket is first
+            const leatherJacketIdx = products.findIndex(p => p.name.toLowerCase() === 'leather jacket');
+            if (leatherJacketIdx > -1) {
+                const [leatherJacket] = products.splice(leatherJacketIdx, 1);
+                products.unshift(leatherJacket);
+            }
+
+            return {
+                reply: "Here are our top picks for you:",
+                products: products.slice(0, 5)
+            };
+        } catch (e) {
+            console.error("Trending query error in backend:", e);
+        }
+    }
+
     // > Category 6: OCCASIONS (Dynamic Search)
     const occasionMap = {
         'wedding': {
