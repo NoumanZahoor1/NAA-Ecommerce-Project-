@@ -227,11 +227,25 @@ const ChatWidget = () => {
         });
 
         if (vibeTerms.length > 0) {
-            const vibeMatches = matched.filter(p => {
+            let vibeMatches = matched.filter(p => {
                 if (!p) return false;
                 const productText = `${p.name || ''} ${p.category || ''} ${p.description || ''} ${p.fit || ''}`.toLowerCase();
                 return vibeTerms.some(term => productText.includes(term));
             });
+
+            // Adjustments for 'trending' queries
+            if (lowerQuery.includes('trending')) {
+                // 1. Exclude Gloves
+                vibeMatches = vibeMatches.filter(p => p.name.toLowerCase() !== 'gloves');
+                
+                // 2. Prioritize Leather Jacket if it exists in the matches
+                const leatherJacketIdx = vibeMatches.findIndex(p => p.name.toLowerCase() === 'leather jacket');
+                if (leatherJacketIdx > -1) {
+                    const [leatherJacket] = vibeMatches.splice(leatherJacketIdx, 1);
+                    vibeMatches.unshift(leatherJacket);
+                }
+            }
+
             if (vibeMatches.length > 0) {
                 matched = vibeMatches;
             }
